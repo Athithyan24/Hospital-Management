@@ -56,7 +56,7 @@ function App() {
     // Background Slider Interval (Slides every 4 seconds)
     const slideInterval = setInterval(() => {
       setCurrentSlide((prev) =>
-        prev === sliderImages.length - 1 ? 0 : prev + 1
+        prev === sliderImages.length - 1 ? 0 : prev + 1,
       );
     }, 4000);
 
@@ -66,15 +66,16 @@ function App() {
   // --- HANDLERS ---
   const handleLoginSubmit = async (e) => {
     e.preventDefault();
-    
+
     // --- TEMPORARY MOCK LOGIN LOGIC ---
     // Since we don't know your exact FastAPI login route, this assigns a role based on the username typed.
     // E.g., typing "nurse_triage" makes you a Nurse. Typing "dr_smith" makes you a Doctor.
     let assignedRole = "Admin"; // Default role
     const typedUser = loginData.username.toLowerCase();
-    
+
     if (typedUser.includes("nurse")) assignedRole = "Nurse";
-    else if (typedUser.includes("doc") || typedUser.includes("dr")) assignedRole = "Doctor";
+    else if (typedUser.includes("doc") || typedUser.includes("dr"))
+      assignedRole = "Doctor";
     else if (typedUser.includes("pharm")) assignedRole = "Pharmacist";
     else if (typedUser.includes("reception")) assignedRole = "Receptionist";
 
@@ -82,7 +83,7 @@ function App() {
     const userData = {
       username: loginData.username,
       role: assignedRole,
-      id: 1
+      id: 1,
     };
 
     handleLoginSuccess(userData);
@@ -103,7 +104,7 @@ function App() {
       setView("billing");
       loadBills();
     } else {
-      setView("home"); 
+      setView("home");
     }
   };
 
@@ -118,7 +119,7 @@ function App() {
     try {
       const response = await axios.post(
         `${API_URL}/book-appointment/`,
-        patientData
+        patientData,
       );
       setBookingMessage(`Success! Token ID: #${response.data.appointment_id}`);
       setPatientData({ ...patientData, patient_name: "", wait_time_mins: 0 });
@@ -162,7 +163,6 @@ function App() {
       <nav className="bg-slate-900 text-white shadow-lg sticky top-0 z-40">
         <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
           <div className="flex justify-between items-center h-32">
-            
             {/* LOGO AREA */}
             <div
               className="flex items-center cursor-pointer"
@@ -183,23 +183,28 @@ function App() {
 
             {/* DYNAMIC NAVIGATION LINKS */}
             <div className="hidden md:flex space-x-2 items-center">
-              
               {/* Home is visible to everyone */}
               <button
                 onClick={() => setView("home")}
                 className={`px-4 py-2 rounded-md font-medium transition ${
-                  view === "home" ? "bg-blue-600 text-white" : "hover:bg-slate-700 text-gray-200"
+                  view === "home"
+                    ? "bg-blue-600 text-white"
+                    : "hover:bg-slate-700 text-gray-200"
                 }`}
               >
                 🏠 Home
               </button>
 
               {/* Public or Admin/Receptionist can see Register */}
-              {(!currentUser || currentUser?.role === "Admin" || currentUser?.role === "Receptionist") && (
+              {(!currentUser ||
+                currentUser?.role === "Admin" ||
+                currentUser?.role === "Receptionist" || currentUser?.role === "Nurse") && (
                 <button
                   onClick={() => setView("patient")}
                   className={`px-4 py-2 rounded-md font-medium transition ${
-                    view === "patient" ? "bg-blue-600 text-white" : "hover:bg-slate-700 text-gray-200"
+                    view === "patient"
+                      ? "bg-blue-600 text-white"
+                      : "hover:bg-slate-700 text-gray-200"
                   }`}
                 >
                   🩺 Register
@@ -214,7 +219,9 @@ function App() {
                     <button
                       onClick={() => setView("doctor")}
                       className={`px-4 py-2 rounded-md font-medium transition ${
-                        view === "doctor" ? "bg-blue-600 text-white" : "hover:bg-slate-700 text-gray-200"
+                        view === "doctor"
+                          ? "bg-blue-600 text-white"
+                          : "hover:bg-slate-700 text-gray-200"
                       }`}
                     >
                       👨‍⚕️ My Console
@@ -222,30 +229,30 @@ function App() {
                   )}
 
                   {/* PHARMACISTS ONLY */}
-                  {currentUser.role === "Pharmacist" && (
+                  {/* PHARMACY: Visible to Pharmacist AND Nurse */}
+                  {(currentUser.role === "Pharmacist" ||
+                    currentUser.role === "Nurse") && (
                     <button
                       onClick={() => {
                         setView("pharmacy");
                         loadPharmacy();
                       }}
-                      className={`px-4 py-2 rounded-md font-medium transition ${
-                        view === "pharmacy" ? "bg-blue-600 text-white" : "hover:bg-slate-700 text-gray-200"
-                      }`}
+                      className={`px-4 py-2 rounded-md font-medium ${view === "pharmacy" ? "bg-blue-600" : "hover:bg-slate-700"}`}
                     >
                       💊 Pharmacy
                     </button>
                   )}
 
-                  {/* BILLING / ADMIN ONLY */}
-                  {(currentUser.role === "Admin" || currentUser.role === "Receptionist") && (
+                  {/* BILLING: Visible to Admin, Receptionist, AND Nurse */}
+                  {(currentUser.role === "Admin" ||
+                    currentUser.role === "Receptionist" ||
+                    currentUser.role === "Nurse") && (
                     <button
                       onClick={() => {
                         setView("billing");
                         loadBills();
                       }}
-                      className={`px-4 py-2 rounded-md font-medium transition ${
-                        view === "billing" ? "bg-blue-600 text-white" : "hover:bg-slate-700 text-gray-200"
-                      }`}
+                      className={`px-4 py-2 rounded-md font-medium ${view === "billing" ? "bg-blue-600" : "hover:bg-slate-700"}`}
                     >
                       💳 Billing
                     </button>
@@ -256,29 +263,45 @@ function App() {
                     <button
                       onClick={() => setView("triage")}
                       className={`px-4 py-2 rounded-md font-medium transition ${
-                        view === "triage" ? "bg-blue-600 text-white" : "hover:bg-slate-700 text-gray-200"
+                        view === "triage"
+                          ? "bg-blue-600 text-white"
+                          : "hover:bg-slate-700 text-gray-200"
                       }`}
                     >
                       🌡️ Triage
                     </button>
                   )}
 
+                  {currentUser.role === "Doctor" && (<div className="flex items-center ml-6 border-l border-slate-600 pl-6">
+                    <span className="text-gray-300 mr-2">Nurse Logged in</span>
+                    <span className="text-green-400 font-bold mr-4">
+                      {currentUser.name}
+                    </span>
+                    <button
+                      onClick={handleLogout}
+                      className="bg-red-600 hover:bg-red-700 px-4 py-2 rounded-md text-sm font-bold transition text-white shadow-md"
+                    >
+                      Logout
+                    </button>
+                  </div>)}
+                
+
                   {/* LOGGED IN USER INFO TRAY */}
-                  <div className="flex items-center ml-6 border-l border-slate-600 pl-6">
-                     <span className="text-gray-300 mr-2">Logged in as:</span>
-                     <span className="text-green-400 font-bold mr-4">
-                       {currentUser.username}
-                     </span>
-                     <button
-                       onClick={handleLogout}
-                       className="bg-red-600 hover:bg-red-700 px-4 py-2 rounded-md text-sm font-bold transition text-white shadow-md"
-                     >
-                       Logout
-                     </button>
-                  </div>
+                  {currentUser.role === "Nurse" && (<div className="flex items-center ml-6 border-l border-slate-600 pl-6">
+                    <span className="text-gray-300 mr-2">Logged in as:</span>
+                    <span className="text-green-400 font-bold mr-4">
+                      Nurse
+                    </span>
+                    <button
+                      onClick={handleLogout}
+                      className="bg-red-600 hover:bg-red-700 px-4 py-2 rounded-md text-sm font-bold transition text-white shadow-md"
+                    >
+                      Logout
+                    </button>
+                  </div>)}
                 </>
               )}
-              
+
               {/* STAFF LOGIN BUTTON (Only visible when logged out) */}
               {!currentUser && (
                 <button
@@ -294,7 +317,6 @@ function App() {
       </nav>
 
       <main className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
-        
         {/* VIEW 0: HOME */}
         {view === "home" && (
           <div className="space-y-12">
@@ -339,18 +361,30 @@ function App() {
             <div className="grid grid-cols-1 md:grid-cols-3 gap-8 text-center mt-12">
               <div className="bg-white p-6 rounded-xl shadow-sm border border-gray-100 transition hover:shadow-md">
                 <div className="text-4xl mb-3">🚑</div>
-                <h3 className="text-xl font-bold text-gray-800">24/7 Emergency</h3>
-                <p className="text-gray-500 mt-2">Always ready to handle critical care situations.</p>
+                <h3 className="text-xl font-bold text-gray-800">
+                  24/7 Emergency
+                </h3>
+                <p className="text-gray-500 mt-2">
+                  Always ready to handle critical care situations.
+                </p>
               </div>
               <div className="bg-white p-6 rounded-xl shadow-sm border border-gray-100 transition hover:shadow-md">
                 <div className="text-4xl mb-3">👨‍⚕️</div>
-                <h3 className="text-xl font-bold text-gray-800">Expert Specialists</h3>
-                <p className="text-gray-500 mt-2">Top-tier medical professionals.</p>
+                <h3 className="text-xl font-bold text-gray-800">
+                  Expert Specialists
+                </h3>
+                <p className="text-gray-500 mt-2">
+                  Top-tier medical professionals.
+                </p>
               </div>
               <div className="bg-white p-6 rounded-xl shadow-sm border border-gray-100 transition hover:shadow-md">
                 <div className="text-4xl mb-3">⚡</div>
-                <h3 className="text-xl font-bold text-gray-800">Zero Wait Time</h3>
-                <p className="text-gray-500 mt-2">Smart Queue algorithm ensures you are seen on time.</p>
+                <h3 className="text-xl font-bold text-gray-800">
+                  Zero Wait Time
+                </h3>
+                <p className="text-gray-500 mt-2">
+                  Smart Queue algorithm ensures you are seen on time.
+                </p>
               </div>
             </div>
 
@@ -370,7 +404,9 @@ function App() {
                       key={doc.id}
                       className="bg-white p-4 rounded-lg shadow-sm border border-gray-100 text-center hover:shadow-md transition"
                     >
-                      <p className="font-bold text-slate-800">{doc.department}</p>
+                      <p className="font-bold text-slate-800">
+                        {doc.department}
+                      </p>
                       <p className="text-sm text-gray-500">{doc.name}</p>
                     </div>
                   ))}
@@ -477,7 +513,9 @@ function App() {
                         })
                       }
                     >
-                      <option value="" disabled>Select a department</option>
+                      <option value="" disabled>
+                        Select a department
+                      </option>
                       {doctorsList.map((doc) => (
                         <option key={doc.id} value={doc.id}>
                           {doc.department} ({doc.name})
@@ -522,7 +560,7 @@ function App() {
         )}
 
         {/* VIEW 3: PHARMACY */}
-        {view === "pharmacy" && currentUser?.role === "Pharmacist" && (
+        {view === "pharmacy" && (currentUser?.role === "Pharmacist" || currentUser?.role==="Nurse") && (
           <div>
             <div className="flex justify-between items-center mb-6">
               <h2 className="text-3xl font-bold text-gray-800">Pharmacy Hub</h2>
@@ -538,17 +576,30 @@ function App() {
                 <p className="text-gray-500">No active prescriptions.</p>
               ) : (
                 prescriptions.map((script) => (
-                  <div key={script.record_id} className="bg-white p-6 rounded-xl shadow-md border-l-4 border-blue-500">
+                  <div
+                    key={script.record_id}
+                    className="bg-white p-6 rounded-xl shadow-md border-l-4 border-blue-500"
+                  >
                     <div className="flex justify-between items-start mb-4">
-                      <h3 className="text-xl font-bold text-gray-800">{script.patient_name}</h3>
-                      <span className="text-sm text-gray-500">{script.date}</span>
+                      <h3 className="text-xl font-bold text-gray-800">
+                        {script.patient_name}
+                      </h3>
+                      <span className="text-sm text-gray-500">
+                        {script.date}
+                      </span>
                     </div>
                     <div className="mb-4">
-                      <p className="text-sm text-gray-500 uppercase font-semibold">Diagnosis</p>
-                      <p className="bg-gray-50 p-2 rounded mt-1 border">{script.diagnosis}</p>
+                      <p className="text-sm text-gray-500 uppercase font-semibold">
+                        Diagnosis
+                      </p>
+                      <p className="bg-gray-50 p-2 rounded mt-1 border">
+                        {script.diagnosis}
+                      </p>
                     </div>
                     <div>
-                      <p className="text-sm text-gray-500 uppercase font-semibold">Prescribed</p>
+                      <p className="text-sm text-gray-500 uppercase font-semibold">
+                        Prescribed
+                      </p>
                       <p className="bg-blue-50 p-3 rounded mt-1 border border-blue-100 font-mono text-sm whitespace-pre-wrap">
                         {script.prescription}
                       </p>
@@ -561,71 +612,101 @@ function App() {
         )}
 
         {/* VIEW 4: BILLING */}
-        {view === "billing" && (currentUser?.role === "Admin" || currentUser?.role === "Receptionist") && (
-          <div>
-            <div className="flex justify-between items-center mb-6">
-              <h2 className="text-3xl font-bold text-gray-800">Billing & Finance</h2>
-              <button
-                className="border-2 border-blue-600 text-blue-600 hover:bg-blue-600 hover:text-white font-semibold py-2 px-4 rounded-lg transition"
-                onClick={loadBills}
-              >
-                🔄 Refresh
-              </button>
-            </div>
-            <div className="bg-white rounded-xl shadow-md overflow-hidden">
-              <table className="w-full text-left border-collapse">
-                <thead className="bg-slate-800 text-white">
-                  <tr>
-                    <th className="py-4 px-6 font-semibold text-sm">Invoice ID</th>
-                    <th className="py-4 px-6 font-semibold text-sm">Patient</th>
-                    <th className="py-4 px-6 font-semibold text-sm">Total</th>
-                    <th className="py-4 px-6 font-semibold text-sm">Status</th>
-                    <th className="py-4 px-6 font-semibold text-sm">Action</th>
-                  </tr>
-                </thead>
-                <tbody className="divide-y divide-gray-200">
-                  {bills.length === 0 ? (
+        {view === "billing" &&
+          (currentUser?.role === "Admin" ||
+            currentUser?.role === "Receptionist" || currentUser?.role === "Nurse") && (
+            <div>
+              <div className="flex justify-between items-center mb-6">
+                <h2 className="text-3xl font-bold text-gray-800">
+                  Billing & Finance
+                </h2>
+                <button
+                  className="border-2 border-blue-600 text-blue-600 hover:bg-blue-600 hover:text-white font-semibold py-2 px-4 rounded-lg transition"
+                  onClick={loadBills}
+                >
+                  🔄 Refresh
+                </button>
+              </div>
+              <div className="bg-white rounded-xl shadow-md overflow-hidden">
+                <table className="w-full text-left border-collapse">
+                  <thead className="bg-slate-800 text-white">
                     <tr>
-                      <td colSpan="5" className="py-8 text-center text-gray-500">No invoices.</td>
+                      <th className="py-4 px-6 font-semibold text-sm">
+                        Invoice ID
+                      </th>
+                      <th className="py-4 px-6 font-semibold text-sm">
+                        Patient
+                      </th>
+                      <th className="py-4 px-6 font-semibold text-sm">Total</th>
+                      <th className="py-4 px-6 font-semibold text-sm">
+                        Status
+                      </th>
+                      <th className="py-4 px-6 font-semibold text-sm">
+                        Action
+                      </th>
                     </tr>
-                  ) : (
-                    bills.map((bill) => (
-                      <tr key={bill.bill_id} className="hover:bg-gray-50">
-                        <td className="py-4 px-6 font-bold">INV-{1000 + bill.bill_id}</td>
-                        <td className="py-4 px-6">{bill.patient_name}</td>
-                        <td className="py-4 px-6 font-bold">${bill.total_amount}</td>
-                        <td className="py-4 px-6">
-                          <span className={`px-3 py-1 rounded-full text-xs font-bold ${
-                            bill.payment_status === "Paid" ? "bg-green-100 text-green-700" : "bg-red-100 text-red-700"
-                          }`}>
-                            {bill.payment_status}
-                          </span>
-                        </td>
-                        <td className="py-4 px-6">
-                          {bill.payment_status === "Unpaid" ? (
-                            <button className="bg-blue-600 hover:bg-blue-700 text-white py-1 px-4 rounded-md transition shadow-sm" onClick={() => handlePayment(bill.bill_id)}>
-                              Pay
-                            </button>
-                          ) : (
-                            <button className="bg-gray-200 text-gray-500 py-1 px-4 rounded-md cursor-not-allowed" disabled>
-                              Receipt Issued
-                            </button>
-                          )}
+                  </thead>
+                  <tbody className="divide-y divide-gray-200">
+                    {bills.length === 0 ? (
+                      <tr>
+                        <td
+                          colSpan="5"
+                          className="py-8 text-center text-gray-500"
+                        >
+                          No invoices.
                         </td>
                       </tr>
-                    ))
-                  )}
-                </tbody>
-              </table>
+                    ) : (
+                      bills.map((bill) => (
+                        <tr key={bill.bill_id} className="hover:bg-gray-50">
+                          <td className="py-4 px-6 font-bold">
+                            INV-{1000 + bill.bill_id}
+                          </td>
+                          <td className="py-4 px-6">{bill.patient_name}</td>
+                          <td className="py-4 px-6 font-bold">
+                            ${bill.total_amount}
+                          </td>
+                          <td className="py-4 px-6">
+                            <span
+                              className={`px-3 py-1 rounded-full text-xs font-bold ${
+                                bill.payment_status === "Paid"
+                                  ? "bg-green-100 text-green-700"
+                                  : "bg-red-100 text-red-700"
+                              }`}
+                            >
+                              {bill.payment_status}
+                            </span>
+                          </td>
+                          <td className="py-4 px-6">
+                            {bill.payment_status === "Unpaid" ? (
+                              <button
+                                className="bg-blue-600 hover:bg-blue-700 text-white py-1 px-4 rounded-md transition shadow-sm"
+                                onClick={() => handlePayment(bill.bill_id)}
+                              >
+                                Pay
+                              </button>
+                            ) : (
+                              <button
+                                className="bg-gray-200 text-gray-500 py-1 px-4 rounded-md cursor-not-allowed"
+                                disabled
+                              >
+                                Receipt Issued
+                              </button>
+                            )}
+                          </td>
+                        </tr>
+                      ))
+                    )}
+                  </tbody>
+                </table>
+              </div>
             </div>
-          </div>
-        )}
+          )}
 
         {/* VIEW 5: TRIAGE */}
         {view === "triage" && currentUser?.role === "Nurse" && (
           <TriageStation />
         )}
-
       </main>
     </div>
   );

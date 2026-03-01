@@ -183,13 +183,7 @@ def get_doctors(db: Session = Depends(get_db)):
 
 @app.post("/book-appointment/")
 def book_appointment(appt: AppointmentCreate, db: Session = Depends(get_db)):
-    new_appt = Appointment(
-        patient_name=appt.patient_name, 
-        doctor_id=appt.doctor_id, 
-        urgency_level=appt.urgency_level, 
-        wait_time_mins=appt.wait_time_mins,
-        status="Pending Triage"  # <--- ADD THIS EXPLICITLY
-    )
+    new_appt = Appointment(patient_name=appt.patient_name, doctor_id=appt.doctor_id, urgency_level=appt.urgency_level, wait_time_mins=appt.wait_time_mins)
     db.add(new_appt)
     db.commit()
     db.refresh(new_appt)
