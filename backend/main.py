@@ -211,14 +211,32 @@ async def get_doctor_queue(doc_id: int):
 
 @app.post("/attend-patient/{appointment_id}")
 def attend_patient(appointment_id: int, data: ConsultationData, db: Session = Depends(get_db)):
+
     appt = db.query(Appointment).filter(Appointment.id == appointment_id).first()
+
+    if not appt:
+        raise HTTPException(status_code=404, detail="Appointment not found")
+
     appt.status = "Completed"
-    record = MedicalRecord(appointment_id=appointment_id, symptoms=data.symptoms, diagnosis=data.diagnosis, prescription=data.prescription)
+
+    record = MedicalRecord(
+        appointment_id=appointment_id,
+        symptoms=data.symptoms,
+        diagnosis=data.diagnosis,
+        prescription=data.prescription
+    )
     db.add(record)
+
     total = 500.0 + data.medicine_cost
-    new_bill = Bill(appointment_id=appointment_id, medicine_fee=data.medicine_cost, total_amount=total)
+    new_bill = Bill(
+        appointment_id=appointment_id,
+        medicine_fee=data.medicine_cost,
+        total_amount=total
+    )
     db.add(new_bill)
+
     db.commit()
+
     return {"message": "Consultation complete."}
 
 @app.get("/pharmacy/prescriptions")

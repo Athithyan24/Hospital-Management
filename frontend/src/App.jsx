@@ -66,27 +66,15 @@ function App() {
   // --- HANDLERS ---
   const handleLoginSubmit = async (e) => {
     e.preventDefault();
+    setLoginError("");
 
-    // --- TEMPORARY MOCK LOGIN LOGIC ---
-    // Since we don't know your exact FastAPI login route, this assigns a role based on the username typed.
-    // E.g., typing "nurse_triage" makes you a Nurse. Typing "dr_smith" makes you a Doctor.
-    let assignedRole = "Admin"; // Default role
-    const typedUser = loginData.username.toLowerCase();
+    try {
+      const response = await axios.post(`${API_URL}/login`, loginData);
 
-    if (typedUser.includes("nurse")) assignedRole = "Nurse";
-    else if (typedUser.includes("doc") || typedUser.includes("dr"))
-      assignedRole = "Doctor";
-    else if (typedUser.includes("pharm")) assignedRole = "Pharmacist";
-    else if (typedUser.includes("reception")) assignedRole = "Receptionist";
-
-    // Simulate successful login data
-    const userData = {
-      username: loginData.username,
-      role: assignedRole,
-      id: 1,
-    };
-
-    handleLoginSuccess(userData);
+      handleLoginSuccess(response.data);
+    } catch (error) {
+      setLoginError("Invalid username or password");
+    }
   };
 
   const handleLoginSuccess = (userData) => {
@@ -275,9 +263,7 @@ function App() {
 
                   {currentUser.role === "Doctor" && (
                     <div className="flex items-center ml-6 border-l border-slate-600 pl-6">
-                      <span className="text-gray-300 mr-2">
-                        Nurse Logged in
-                      </span>
+                      <span className="text-gray-300 mr-2">Logged in as:</span>
                       <span className="text-green-400 font-bold mr-4">
                         {currentUser.name}
                       </span>
