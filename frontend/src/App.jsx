@@ -20,6 +20,7 @@ function App() {
   // App State
   const [doctorsList, setDoctorsList] = useState([]);
   const [currentUser, setCurrentUser] = useState(null);
+  const [adminHistory, setAdminHistory] = useState([]);
 
   // Slider State
   const [currentSlide, setCurrentSlide] = useState(0);
@@ -77,6 +78,15 @@ function App() {
     }
   };
 
+  const loadAdminHistory = async () => {
+    try {
+      const response = await axios.get(`${API_URL}/admin/full-history`);
+      setAdminHistory(response.data);
+    } catch (error) {
+      console.error("Error loading admin history", error);
+    }
+  };
+
   const handleLoginSuccess = (userData) => {
     setCurrentUser(userData);
 
@@ -88,7 +98,10 @@ function App() {
     } else if (userData.role === "Pharmacist") {
       setView("pharmacy");
       loadPharmacy();
-    } else if (userData.role === "Receptionist" || userData.role === "Admin") {
+    } else if (userData.role === "Admin") {
+      setView("admin");
+      loadAdminHistory();
+    } else if (userData.role === "Receptionist") {
       setView("billing");
       loadBills();
     } else {
@@ -274,6 +287,20 @@ function App() {
                         Logout
                       </button>
                     </div>
+                  )}
+
+                  {currentUser.role === "Admin" && (
+                    <button
+                      onClick={() => {
+                        setView("admin");
+                        loadAdminHistory();
+                      }}
+                      className={`px-4 py-2 rounded-md font-medium ${
+                        view === "admin" ? "bg-blue-600" : "hover:bg-slate-700"
+                      }`}
+                    >
+                      📊 Admin Panel
+                    </button>
                   )}
 
                   {/* LOGGED IN USER INFO TRAY */}
@@ -700,6 +727,83 @@ function App() {
             </div>
           )}
 
+        {view === "admin" && currentUser?.role === "Admin" && (
+          <div>
+            <div className="flex justify-between items-center mb-6">
+              <h2 className="text-3xl font-bold text-gray-800">
+                Admin – Full Patient History
+              </h2>
+              <button
+                className="border-2 border-blue-600 text-blue-600 hover:bg-blue-600 hover:text-white font-semibold py-2 px-4 rounded-lg transition"
+                onClick={loadAdminHistory}
+              >
+                🔄 Refresh
+              </button>
+            </div>
+
+            <div className="bg-white rounded-xl shadow-md overflow-hidden">
+              <table className="w-full text-left border-collapse">
+                <thead className="bg-slate-800 text-white">
+                  <tr>
+                    <th className="py-4 px-6">ID</th>
+                    <th className="py-4 px-6">Timeline</th>
+                    <th className="py-4 px-6">Patient</th>
+                    <th className="py-4 px-6">Doctor</th>
+                    <th className="py-4 px-6">Department</th>
+                    <th className="py-4 px-6">Status</th>
+                    <th className="py-4 px-6">Diagnosis</th>
+                    <th className="py-4 px-6">Bill</th>
+                    <th className="py-4 px-6">Payment</th>
+                  </tr>
+                </thead>
+                <tbody className="divide-y divide-gray-200">
+                  {adminHistory.length === 0 ? (
+                    <tr>
+                      <td
+                        colSpan="8"
+                        className="py-8 text-center text-gray-500"
+                      >
+                        No records found.
+                      </td>
+                    </tr>
+                  ) : (
+                    adminHistory.map((item) => (
+                      <tr key={item.appointment_id}>
+                        <td className="py-4 px-6 font-bold">
+                          #{item.appointment_id}
+                        </td>
+                        <td>
+                          <div>
+                            <strong>Registered:</strong>{" "}
+                            {item.timeline?.registered_date || "—"}
+                          </div>
+                          <div>
+                            <strong>Dismissed:</strong>{" "}
+                            {item.timeline?.dismissed_date || "—"}
+                          </div>
+                        </td>
+                        <td className="py-4 px-6">{item.patient_name}</td>
+                        <td className="py-4 px-6 font-semibold text-blue-700">
+                          {item.doctor_name}
+                        </td>
+                        <td className="py-4 px-6">{item.department}</td>
+                        <td className="py-4 px-6">{item.status}</td>
+                        <td className="py-4 px-6">{item.diagnosis || "—"}</td>
+                        <td className="py-4 px-6">
+                          {item.bill_total ? `$${item.bill_total}` : "—"}
+                        </td>
+                        <td className="py-4 px-6">
+                          {item.payment_status || "—"}
+                        </td>
+                      </tr>
+                    ))
+                  )}
+                </tbody>
+              </table>
+            </div>
+          </div>
+        )}
+
         {/* VIEW 5: TRIAGE */}
         {view === "triage" && currentUser?.role === "Nurse" && (
           <TriageStation />
@@ -708,5 +812,4 @@ function App() {
     </div>
   );
 }
-
 export default App;

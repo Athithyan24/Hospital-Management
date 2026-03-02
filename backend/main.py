@@ -2,10 +2,11 @@ from fastapi import FastAPI, Depends, HTTPException
 from fastapi.middleware.cors import CORSMiddleware
 from sqlalchemy import create_engine, Column, Integer, String, Float, ForeignKey, DateTime
 from sqlalchemy.orm import declarative_base, sessionmaker, Session
+from sqlalchemy.sql import func
 from pydantic import BaseModel
-from datetime import datetime
+from datetime import datetime, timezone
+import pytz
 import heapq
-import sqlite3
 
 # --- 1. DATABASE SETUP ---
 SQLALCHEMY_DATABASE_URL = "sqlite:///./hospital.db"
@@ -31,6 +32,7 @@ class Appointment(Base):
     urgency_level = Column(Integer)
     wait_time_mins = Column(Integer, default=0)
     status = Column(String, default="Pending Triage")
+    created_at = Column(DateTime(timezone=True), default=lambda: datetime.now(timezone.utc))
     
 class Vitals(Base):
     __tablename__ = "vitals"
@@ -48,7 +50,7 @@ class MedicalRecord(Base):
     symptoms = Column(String)
     diagnosis = Column(String)
     prescription = Column(String)
-    created_at = Column(DateTime, default=datetime.utcnow)
+    created_at = Column(DateTime(timezone=True), default=lambda: datetime.now(timezone.utc))
 
 class Bill(Base):
     __tablename__ = "bills"
@@ -58,6 +60,7 @@ class Bill(Base):
     medicine_fee = Column(Float, default=0.0)
     total_amount = Column(Float)
     payment_status = Column(String, default="Unpaid")
+    paid_at = Column(DateTime(timezone=True), nullable=True)
 
 Base.metadata.create_all(bind=engine)
 
@@ -90,6 +93,10 @@ def init_db():
         # Add Triage Nurse
         nurse = User(username="nurse_triage", password="password123", role="Nurse", department="Triage", name="Nurse Joy")
         db.add(nurse)
+
+        # Add Admin
+        admin = User(username="admin", password="admin123", role="Admin", department="Administration", name="System Admin")
+        db.add(admin)
         
         db.commit()
     db.close()
@@ -114,38 +121,7 @@ def get_db():
     finally:
         db.close()
 
-def setup_database():
-    conn = sqlite3.connect("hospital.db")
-    cursor = conn.cursor()
-    
-    # 1. Modify appointments table to include a 'status'
-    cursor.execute("""
-        CREATE TABLE IF NOT EXISTS appointments (
-            id INTEGER PRIMARY KEY AUTOINCREMENT,
-            patient_name TEXT,
-            doctor_id INTEGER,
-            urgency_level INTEGER,
-            status TEXT DEFAULT 'Pending Triage'
-        )
-    """)
-    
-    # 2. Create the Vitals table linked to the appointment
-    cursor.execute("""
-        CREATE TABLE IF NOT EXISTS vitals (
-            id INTEGER PRIMARY KEY AUTOINCREMENT,
-            appointment_id INTEGER,
-            blood_pressure TEXT,
-            temperature REAL,
-            weight REAL,
-            oxygen_level INTEGER,
-            FOREIGN KEY(appointment_id) REFERENCES appointments(id)
-        )
-    """)
-    conn.commit()
-    conn.close()
 
-# Run the SQLite raw schema setup
-setup_database()
 
 # --- 4. PYDANTIC SCHEMAS ---
 class AppointmentCreate(BaseModel):
@@ -181,6 +157,48 @@ def login(data: LoginRequest, db: Session = Depends(get_db)):
 def get_doctors(db: Session = Depends(get_db)):
     return db.query(User).filter(User.role == "Doctor").all()
 
+@app.get("/admin/appointments")
+def admin_all_appointments(db: Session = Depends(get_db)):
+    appointments = db.query(Appointment).all()
+    return appointments
+
+@app.get("/admin/full-history")
+def admin_full_history(db: Session = Depends(get_db)):
+    ist = pytz.timezone("Asia/Kolkata")
+    data = db.query(
+        Appointment,
+        User,
+        Vitals,
+        MedicalRecord,
+        Bill
+    )\
+    .join(User, Appointment.doctor_id == User.id)\
+    .outerjoin(Vitals, Appointment.id == Vitals.appointment_id)\
+    .outerjoin(MedicalRecord, Appointment.id == MedicalRecord.appointment_id)\
+    .outerjoin(Bill, Appointment.id == Bill.appointment_id)\
+    .all()
+
+    result = []
+
+    for a, doctor, v, m, b in data:
+        result.append({
+            "appointment_id": a.id,
+            "patient_name": a.patient_name,
+            "doctor_name": doctor.name,
+            "department": doctor.department,
+            "status": a.status,
+            "diagnosis": m.diagnosis if m else None,
+            "bill_total": b.total_amount if b else None,
+            "payment_status": b.payment_status if b else None,
+
+             "timeline": {
+                    "registered_date": a.created_at.astimezone(ist).strftime("%Y-%m-%d %H:%M") if a.created_at else None,
+                    "dismissed_date": b.paid_at.astimezone(ist).strftime("%Y-%m-%d %H:%M") if b and b.paid_at else None
+                 }
+        })
+
+    return result
+
 @app.post("/book-appointment/")
 def book_appointment(appt: AppointmentCreate, db: Session = Depends(get_db)):
     new_appt = Appointment(patient_name=appt.patient_name, doctor_id=appt.doctor_id, urgency_level=appt.urgency_level, wait_time_mins=appt.wait_time_mins)
@@ -190,24 +208,34 @@ def book_appointment(appt: AppointmentCreate, db: Session = Depends(get_db)):
     return {"message": "Appointment booked successfully!", "appointment_id": new_appt.id}
 
 @app.get("/doctor/{doc_id}/queue")
-async def get_doctor_queue(doc_id: int):
-    conn = sqlite3.connect("hospital.db")
-    conn.row_factory = sqlite3.Row
-    cursor = conn.cursor()
-    
-    cursor.execute("""
-        SELECT a.id as appointment_id, a.patient_name, a.urgency_level, a.status,
-               v.blood_pressure, v.temperature, v.weight, v.oxygen_level
-        FROM appointments a
-        LEFT JOIN vitals v ON a.id = v.appointment_id
-        WHERE a.doctor_id = ? AND a.status = 'Waiting for Doctor'
-        ORDER BY a.urgency_level DESC, a.id ASC
-    """, (doc_id,))
-    
-    queue = cursor.fetchall()
-    conn.close()
-    
-    return {"smart_queue": [dict(q) for q in queue]}
+def get_doctor_queue(doc_id: int, db: Session = Depends(get_db)):
+
+    queue = db.query(Appointment, Vitals)\
+        .outerjoin(Vitals, Appointment.id == Vitals.appointment_id)\
+        .filter(
+            Appointment.doctor_id == doc_id,
+            Appointment.status == "Waiting for Doctor"
+        )\
+        .order_by(Appointment.urgency_level.desc(), Appointment.id.asc())\
+        .all()
+
+    result = []
+
+    for appt, vitals in queue:
+        result.append({
+            "appointment_id": appt.id,
+            "patient_name": appt.patient_name,
+            "urgency_level": appt.urgency_level,
+            "status": appt.status,
+            "vitals": {
+                "blood_pressure": vitals.blood_pressure if vitals else None,
+                "temperature": vitals.temperature if vitals else None,
+                "weight": vitals.weight if vitals else None,
+                "oxygen_level": vitals.oxygen_level if vitals else None,
+            } if vitals else None
+        })
+
+    return {"smart_queue": result}
 
 @app.post("/attend-patient/{appointment_id}")
 def attend_patient(appointment_id: int, data: ConsultationData, db: Session = Depends(get_db)):
@@ -253,48 +281,51 @@ def get_bills(db: Session = Depends(get_db)):
 def pay_bill(bill_id: int, db: Session = Depends(get_db)):
     bill = db.query(Bill).filter(Bill.id == bill_id).first()
     bill.payment_status = "Paid"
+    bill.paid_at = datetime.utcnow()
     db.commit()
     return {"message": "Payment successful!"}
 
 # --- NURSE / TRIAGE MODULE ---
 
 @app.get("/triage/queue")
-async def get_triage_queue():
-    """Fetches all patients who have registered but haven't seen the nurse yet."""
-    conn = sqlite3.connect("hospital.db")
-    conn.row_factory = sqlite3.Row
-    cursor = conn.cursor()
-    
-    cursor.execute("SELECT * FROM appointments WHERE status = 'Pending Triage'")
-    patients = cursor.fetchall()
-    conn.close()
-    
-    return [dict(p) for p in patients]
+def get_triage_queue(db: Session = Depends(get_db)):
+    patients = db.query(Appointment)\
+        .filter(Appointment.status == "Pending Triage")\
+        .all()
+
+    return patients
 
 @app.post("/triage/vitals/{appointment_id}")
-async def submit_triage(appointment_id: int, vitals: TriageData):
+def submit_triage(
+    appointment_id: int,
+    vitals: TriageData,
+    db: Session = Depends(get_db)
+):
     """Saves the patient's vitals and moves them to the Doctor's queue."""
-    conn = sqlite3.connect("hospital.db")
-    cursor = conn.cursor()
-    
-    try:
-        # 1. Insert the vitals into the database
-        cursor.execute("""
-            INSERT INTO vitals (appointment_id, blood_pressure, temperature, weight, oxygen_level)
-            VALUES (?, ?, ?, ?, ?)
-        """, (appointment_id, vitals.blood_pressure, vitals.temperature, vitals.weight, vitals.oxygen_level))
-        
-        # 2. Update the appointment status so the Doctor can now see them
-        cursor.execute("""
-            UPDATE appointments 
-            SET status = 'Waiting for Doctor' 
-            WHERE id = ?
-        """, (appointment_id,))
-        
-        conn.commit()
-        return {"status": "success", "message": f"Patient #{appointment_id} triaged and sent to doctor."}
-    except Exception as e:
-        conn.rollback()
-        return {"status": "error", "message": str(e)}
-    finally:
-        conn.close()
+
+    # Check appointment exists
+    appt = db.query(Appointment).filter(Appointment.id == appointment_id).first()
+
+    if not appt:
+        raise HTTPException(status_code=404, detail="Appointment not found")
+
+    # Save vitals using SQLAlchemy
+    new_vitals = Vitals(
+        appointment_id=appointment_id,
+        blood_pressure=vitals.blood_pressure,
+        temperature=vitals.temperature,
+        weight=vitals.weight,
+        oxygen_level=vitals.oxygen_level
+    )
+
+    db.add(new_vitals)
+
+    # Update status
+    appt.status = "Waiting for Doctor"
+
+    db.commit()
+
+    return {
+        "status": "success",
+        "message": f"Patient #{appointment_id} triaged and sent to doctor."
+    }

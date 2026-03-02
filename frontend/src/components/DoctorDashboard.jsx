@@ -77,6 +77,7 @@ export default function DoctorDashboard({ doctorId }) {
               <th className="py-4 px-6 font-semibold text-sm">Token #</th>
               <th className="py-4 px-6 font-semibold text-sm">Patient Name</th>
               <th className="py-4 px-6 font-semibold text-sm">Urgency</th>
+              <th className="py-4 px-6 font-semibold text-sm">Vitals</th>
               <th className="py-4 px-6 font-semibold text-sm">Action</th>
             </tr>
           </thead>
@@ -92,6 +93,7 @@ export default function DoctorDashboard({ doctorId }) {
                 <tr key={p.appointment_id} className="hover:bg-gray-50">
                   <td className="py-4 px-6 font-bold">#{p.appointment_id}</td>
                   <td className="py-4 px-6">{p.patient_name}</td>
+
                   <td className="py-4 px-6">
                     <span
                       className={`px-3 py-1 rounded-full text-xs font-bold ${
@@ -102,6 +104,26 @@ export default function DoctorDashboard({ doctorId }) {
                     >
                       Level {p.urgency_level}
                     </span>
+                  </td>
+                  <td className="py-4 px-6 text-sm">
+                    {p.vitals ? (
+                      <div className="space-y-1">
+                        <div className="text-red-600">
+                          BP: {p.vitals.blood_pressure}
+                        </div>
+                        <div className="text-orange-600">
+                          Temp: {p.vitals.temperature}°F
+                        </div>
+                        <div className="text-green-600">
+                          Wt: {p.vitals.weight}kg
+                        </div>
+                        <div className="text-blue-600">
+                          O₂: {p.vitals.oxygen_level}%
+                        </div>
+                      </div>
+                    ) : (
+                      <span className="text-gray-400">No Vitals</span>
+                    )}
                   </td>
                   <td className="py-4 px-6">
                     <button
