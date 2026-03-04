@@ -6,8 +6,19 @@ from sqlalchemy.sql import func
 from pydantic import BaseModel
 from datetime import datetime, timezone, timedelta
 from zoneinfo import ZoneInfo
+import os
+from dotenv import load_dotenv
+from twilio.rest import Client
 import pytz
 import heapq
+
+load_dotenv()
+
+account_sid = os.getenv("TWILIO_ACCOUNT_SID")
+auth_token = os.getenv("TWILIO_AUTH_TOKEN")
+twilio_phone = os.getenv("TWILIO_PHONE")
+
+client = Client(account_sid, auth_token)
 
 # --- 1. DATABASE SETUP ---
 SQLALCHEMY_DATABASE_URL = "sqlite:///./hospital.db"
@@ -30,9 +41,12 @@ class Appointment(Base):
     __tablename__ = "appointments"
     id = Column(Integer, primary_key=True, index=True)
     patient_name = Column(String)
+    phone_number = Column(String)
     doctor_id = Column(Integer, ForeignKey("users.id"))
     urgency_level = Column(Integer)
     wait_time_mins = Column(Integer, default=0)
+
+    token_number = Column(Integer)
     status = Column(String, default="Pending Triage")
     created_at = Column(DateTime(timezone=True), default=lambda: datetime.now(timezone.utc))
     appointment_time = Column(DateTime(timezone=True), nullable=True)
@@ -72,6 +86,20 @@ class TriageData(BaseModel):
     temperature: float   
     weight: float        
     oxygen_level: int
+
+def send_sms(phone, message):
+    client.messages.create(
+        body=message,
+        from_=twilio_phone,  # Twilio number
+        to=phone
+    )
+
+def send_whatsapp(phone, message):
+    client.messages.create(
+        body=message,
+        from_="whatsapp:+14155238886",  # Twilio sandbox number
+        to=f"whatsapp:{phone}"
+    )
 
 def allocate_appointment_time(db, doctor_id, urgency):
     ist = ZoneInfo("Asia/Kolkata")
@@ -169,6 +197,7 @@ def get_db():
 # --- 4. PYDANTIC SCHEMAS ---
 class AppointmentCreate(BaseModel):
     patient_name: str
+    phone_number: str
     doctor_id: int
     urgency_level: int
     wait_time_mins: int = 0
@@ -246,29 +275,75 @@ def admin_full_history(db: Session = Depends(get_db)):
 @app.post("/book-appointment/")
 def book_appointment(appt: AppointmentCreate, db: Session = Depends(get_db)):
 
+    # 1️⃣ Allocate time
     allocated_time = allocate_appointment_time(
         db,
         appt.doctor_id,
         appt.urgency_level
     )
 
+    # 2️⃣ Get doctor details
+    doctor = db.query(User).filter(User.id == appt.doctor_id).first()
+
+    if not doctor:
+        raise HTTPException(status_code=404, detail="Doctor not found")
+
+    # 3️⃣ Get today's start time (IST)
+    ist = ZoneInfo("Asia/Kolkata")
+    today_start = datetime.now(ist).replace(hour=0, minute=0, second=0, microsecond=0)
+
+    # 4️⃣ Count today's appointments for same department
+    dept_count = (
+        db.query(Appointment)
+        .join(User, Appointment.doctor_id == User.id)
+        .filter(
+            User.department == doctor.department,
+            Appointment.created_at >= today_start
+        )
+        .count()
+    )
+
+    new_token = dept_count + 1
+
+    # 5️⃣ Create appointment with department-wise token
     new_appt = Appointment(
         patient_name=appt.patient_name,
+        phone_number=appt.phone_number,
         doctor_id=appt.doctor_id,
         urgency_level=appt.urgency_level,
         wait_time_mins=appt.wait_time_mins,
-        appointment_time=allocated_time   # ✅ SAVE IT HERE
+        appointment_time=allocated_time,
+        token_number=new_token
     )
 
     db.add(new_appt)
     db.commit()
     db.refresh(new_appt)
 
-    ist = ZoneInfo("Asia/Kolkata")
+    # Prepare message
+    urgency_label = get_urgency_label(appt.urgency_level)
+
+    message = f"""
+    CityCare Hospital
+    Department: {doctor.department}
+    Doctor: {doctor.name}
+    Token No: {new_token}
+    Urgency: {urgency_label}
+    Time: {allocated_time.strftime("%Y-%m-%d %I:%M %p")}
+    """
+
+# Send SMS
+    try:
+        send_sms(appt.phone_number, message)
+        send_whatsapp(appt.phone_number, message)
+    except Exception as e:
+        print("Notification failed:", e)
 
     return {
         "message": "Appointment booked successfully!",
         "appointment_id": new_appt.id,
+        "token_number": new_token,
+        "department": doctor.department,
         "appointment_time": allocated_time.astimezone(ist).strftime("%Y-%m-%d %I:%M %p")
     }
 
@@ -300,7 +375,7 @@ def doctor_schedule(doc_id: int, db: Session = Depends(get_db)):
     ist = ZoneInfo("Asia/Kolkata")
 
     appts = db.query(Appointment)\
-        .filter(Appointment.doctor_id == doc_id)\
+        .filter(Appointment.doctor_id == doc_id, Appointment.status.in_(["Pending Triage","Waiting for Doctor"]))\
         .order_by(Appointment.appointment_time.asc())\
         .all()
 

@@ -1,0 +1,13 @@
+# Backend
+backend/.env
+backend/__pycache__/
+backend/*.db
+
+# Frontend
+frontend/node_modules/
+frontend/dist/
+
+# Global
+.env
+__pycache__/
+*.db

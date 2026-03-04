@@ -89,7 +89,9 @@ export default function TriageStation() {
                   key={p.appointment_id}
                   className="hover:bg-slate-700 text-slate-300 bg-slate-800"
                 >
-                  <td className="py-4 px-6 font-bold ">#{p.appointment_id}</td>
+                  <td className="py-4 px-6 font-bold ">
+                    #{p.token_number || p.appointment_id}
+                  </td>
                   <td className="py-4 px-6">{p.patient_name}</td>
                   <td className="py-4 px-6">
                     <span className="px-3 py-1 rounded-full text-xs font-bold bg-yellow-100 text-yellow-700">

@@ -147,7 +147,7 @@ export default function DoctorDashboard({ doctorId }) {
                   </td>
                   <td className="py-4 px-6">
                     <button
-                      className="bg-green-500 hover:bg-green-600 text-white py-1 px-4 rounded-md shadow-sm transition"
+                      className="bg-green-500 cursor-pointer hover:bg-green-600 text-white py-1 px-4 rounded-md shadow-sm transition"
                       onClick={() => setSelectedPatient(p)}
                     >
                       Attend

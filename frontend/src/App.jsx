@@ -40,6 +40,7 @@ function App() {
   // Registration State
   const [patientData, setPatientData] = useState({
     patient_name: "",
+    phone_number: "",
     doctor_id: "",
     urgency_level: 1,
     wait_time_mins: 0,
@@ -518,6 +519,13 @@ function App() {
                   {doctorsList.map((doc) => (
                     <div
                       key={doc.id}
+                      onClick={() => {
+                        setPatientData((prev) => ({
+                          ...prev,
+                          doctor_id: doc.id,
+                        }));
+                        setView("patient");
+                      }}
                       className="bg-slate-900/70 backdrop-blur-lg border border-slate-700 p-4 rounded-lg shadow-sm text-center hover:shadow-md transition hover:bg-violet-400/30 cursor-pointer hover:scale-105"
                     >
                       <p className="font-bold text-green-400">
@@ -699,6 +707,24 @@ function App() {
                       setPatientData({
                         ...patientData,
                         patient_name: e.target.value,
+                      })
+                    }
+                  />
+                </div>
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 mb-1">
+                    Phone Number (with country code)
+                  </label>
+                  <input
+                    type="tel"
+                    required
+                    placeholder="+919876543210"
+                    className="w-full border rounded-lg p-3 outline-none focus:ring-2 focus:ring-blue-500"
+                    value={patientData.phone_number}
+                    onChange={(e) =>
+                      setPatientData({
+                        ...patientData,
+                        phone_number: e.target.value,
                       })
                     }
                   />
