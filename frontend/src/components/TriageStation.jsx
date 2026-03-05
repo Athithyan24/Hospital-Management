@@ -11,6 +11,7 @@ export default function TriageStation() {
     oxygen_level: "",
   });
 
+  const API_URL = import.meta.env.VITE_API_URL || "http://127.0.0.1:8000";
   // Fetch the pending patients when the component loads
   useEffect(() => {
     fetchQueue();
@@ -18,7 +19,7 @@ export default function TriageStation() {
 
   const fetchQueue = async () => {
     try {
-      const res = await axios.get("http://127.0.0.1:8000/triage/queue");
+      const res = await axios.get(`${API_URL}/triage/queue`);
       setQueue(res.data);
     } catch (error) {
       console.error("Failed to fetch triage queue", error);
@@ -32,10 +33,7 @@ export default function TriageStation() {
       // 2. Safely grab the ID whether the backend calls it 'id' or 'appointment_id'
       const idToUse = selectedPatient.appointment_id || selectedPatient.id;
 
-      await axios.post(
-        `http://127.0.0.1:8000/triage/vitals/${idToUse}`,
-        vitals,
-      );
+      await axios.post(`${API_URL}/triage/vitals/${idToUse}`, vitals);
 
       alert("Vitals saved successfully! Patient forwarded to doctor.");
       setSelectedPatient(null);
