@@ -2,17 +2,20 @@ import React, { useState } from "react";
 import axios from "axios";
 
 export default function Login({ onLogin }) {
-  const [credentials, setCredentials] = useState({ username: "", password: "" });
+  const [credentials, setCredentials] = useState({
+    username: "",
+    password: "",
+  });
   const [error, setError] = useState("");
 
   const handleSubmit = async (e) => {
     e.preventDefault();
     setError(""); // Clear previous errors
-    
+
     try {
       // Call your FastAPI backend
       const res = await axios.post("http://127.0.0.1:8000/login", credentials);
-      
+
       // If successful, pass the user object (id, name, role, etc.) up to App.jsx
       onLogin(res.data);
     } catch (err) {
@@ -30,7 +33,7 @@ export default function Login({ onLogin }) {
         <h2 className="text-3xl font-extrabold text-center text-slate-800 mb-6">
           🏥 Hospital Login
         </h2>
-        
+
         {error && (
           <div className="bg-red-100 text-red-700 p-3 rounded-lg mb-4 text-center text-sm font-semibold">
             {error}
@@ -39,23 +42,31 @@ export default function Login({ onLogin }) {
 
         <form onSubmit={handleSubmit} className="space-y-4">
           <div>
-            <label className="block text-sm font-medium text-violet-500 mb-1">Username</label>
+            <label className="block text-sm font-medium text-violet-500 mb-1">
+              Username
+            </label>
             <input
               type="text"
               required
               className="w-full border border-gray-300 rounded-lg p-3 outline-none focus:ring-2 focus:ring-purple-500"
               value={credentials.username}
-              onChange={(e) => setCredentials({ ...credentials, username: e.target.value })}
+              onChange={(e) =>
+                setCredentials({ ...credentials, username: e.target.value })
+              }
             />
           </div>
           <div>
-            <label className="block text-sm font-medium text-violet-500 mb-1">Password</label>
+            <label className="block text-sm font-medium text-violet-500 mb-1">
+              Password
+            </label>
             <input
               type="password"
               required
               className="w-full border border-gray-300 rounded-lg p-3 outline-none focus:ring-2 focus:ring-purple-500"
               value={credentials.password}
-              onChange={(e) => setCredentials({ ...credentials, password: e.target.value })}
+              onChange={(e) =>
+                setCredentials({ ...credentials, password: e.target.value })
+              }
             />
           </div>
           <button

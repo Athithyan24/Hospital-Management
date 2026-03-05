@@ -1,13 +1,20 @@
-# Backend
-backend/.env
-backend/__pycache__/
-backend/*.db
-
-# Frontend
+# Ignore Node.js packages (Too heavy)
+node_modules/
 frontend/node_modules/
-frontend/dist/
 
-# Global
-.env
+# Ignore Python cache
 __pycache__/
-*.db
+*.pyc
+
+# Ignore Environment Variables (PROTECT YOUR TWILIO KEYS!)
+.env
+backend/.env
+frontend/.env
+
+# Ignore Local Database
+hospital.db
+backend/hospital.db
+
+# Ignore build folders
+dist/
+frontend/dist/

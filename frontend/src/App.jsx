@@ -21,7 +21,7 @@ import TriageStation from "./components/TriageStation";
 import DoctorDashboard from "./components/DoctorDashboard";
 // import Login from "../Login/Login"; // Ensure you are using the embedded login below or the component
 
-const API_URL = "http://127.0.0.1:8000";
+const API_URL = import.meta.env.VITE_API_URL || "http://127.0.0.1:8000";
 
 // Array of images for the slider
 const sliderImages = [home, emergency, walk, baby];

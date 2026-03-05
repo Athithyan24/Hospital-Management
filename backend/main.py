@@ -21,8 +21,12 @@ twilio_phone = os.getenv("TWILIO_PHONE")
 client = Client(account_sid, auth_token)
 
 # --- 1. DATABASE SETUP ---
-SQLALCHEMY_DATABASE_URL = "sqlite:///./hospital.db"
-engine = create_engine(SQLALCHEMY_DATABASE_URL, connect_args={"check_same_thread": False})
+SQLALCHEMY_DATABASE_URL = os.getenv("DATABASE_URL", "sqlite:///./hospital.db")
+
+if SQLALCHEMY_DATABASE_URL.startswith("sqlite"):
+    engine = create_engine(SQLALCHEMY_DATABASE_URL, connect_args={"check_same_thread": False})
+else:
+    engine = create_engine(SQLALCHEMY_DATABASE_URL)
 SessionLocal = sessionmaker(autocommit=False, autoflush=False, bind=engine)
 Base = declarative_base()
 
@@ -261,9 +265,11 @@ init_db() # Run seeder on startup
 # --- 3. FASTAPI SETUP ---
 app = FastAPI(title="Smart Hospital Management System")
 
+allowed_origins = os.getenv("FRONTEND_URL", "*").split(",")
+
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=["*"],  
+    allow_origins=allowed_origins,
     allow_credentials=True,
     allow_methods=["*"],  
     allow_headers=["*"],  

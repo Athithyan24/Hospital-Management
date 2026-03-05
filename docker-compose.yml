@@ -1,0 +1,19 @@
+version: "3.8"
+
+services:
+  backend:
+    build: ./backend
+    ports:
+      - "8000:8000"
+    # This automatically loads your Twilio/DB secrets into the container
+    env_file:
+      - ./backend/.env
+    restart: always
+
+  frontend:
+    build: ./frontend
+    ports:
+      - "5173:80" # Maps local port 5173 to Nginx's port 80
+    depends_on:
+      - backend
+    restart: always
