@@ -42,13 +42,12 @@ function App() {
     patient_name: "",
     phone_number: "",
     doctor_id: "",
-    urgency_level: 1,
+    condition: "",
     wait_time_mins: 0,
   });
   const [bookingMessage, setBookingMessage] = useState("");
 
   //Doctor Shedule
-  const [doctorSchedule, setDoctorSchedule] = useState([]);
 
   //nurse Shedule
   const [nurseSchedule, setNurseSchedule] = useState([]);
@@ -61,15 +60,36 @@ function App() {
   const [prescriptions, setPrescriptions] = useState([]);
   const [bills, setBills] = useState([]);
 
+  const [conditions, setConditions] = useState([]);
+
   // --- INITIAL LOAD & SLIDER TIMER ---
   useEffect(() => {
     // Fetch doctors
     axios
       .get(`${API_URL}/doctors`)
-      .then((res) => {
+      .then(async (res) => {
         setDoctorsList(res.data);
-        if (res.data.length > 0)
-          setPatientData((prev) => ({ ...prev, doctor_id: res.data[0].id }));
+
+        if (res.data.length > 0) {
+          const firstDoctor = res.data[0];
+
+          // Set first doctor as default
+          setPatientData((prev) => ({
+            ...prev,
+            doctor_id: Number(firstDoctor.id),
+            condition: "",
+          }));
+
+          // 🔥 Fetch conditions for first doctor's department
+          try {
+            const conditionRes = await axios.get(
+              `${API_URL}/triage-options/${firstDoctor.department}`,
+            );
+            setConditions(conditionRes.data.conditions);
+          } catch (err) {
+            console.error("Error fetching conditions", err);
+          }
+        }
       })
       .catch((err) => console.error("Error fetching doctors", err));
 
@@ -83,18 +103,30 @@ function App() {
     return () => clearInterval(slideInterval); // Cleanup on unmount
   }, []);
 
-  //Doctor Schedule Loading
+  useEffect(() => {
+    if (!patientData.doctor_id || doctorsList.length === 0) return;
 
-  const loadDoctorSchedule = async () => {
-    try {
-      const response = await axios.get(
-        `${API_URL}/doctor/${currentUser.id}/appointments`,
-      );
-      setDoctorSchedule(response.data);
-    } catch (error) {
-      console.error("Error loading schedule", error);
+    const selectedDoc = doctorsList.find(
+      (doc) => doc.id === patientData.doctor_id,
+    );
+
+    if (selectedDoc) {
+      axios
+        .get(`${API_URL}/triage-options/${selectedDoc.department}`)
+        .then((res) => {
+          setConditions(res.data.conditions);
+
+          // Reset condition when doctor changes
+          setPatientData((prev) => ({
+            ...prev,
+            condition: "",
+          }));
+        })
+        .catch((err) => console.error("Error fetching conditions", err));
     }
-  };
+  }, [patientData.doctor_id, doctorsList]);
+
+  //Doctor Schedule Loading
 
   //Nurse Schedule Loading
   const loadNurseSchedule = async () => {
@@ -167,7 +199,14 @@ function App() {
       setBookingMessage(
         `Success! Token ID: #${response.data.appointment_id} | Time: ${response.data.appointment_time}`,
       );
-      setPatientData({ ...patientData, patient_name: "", wait_time_mins: 0 });
+      setPatientData((prev) => ({
+        ...prev,
+        patient_name: "",
+        phone_number: "",
+        condition: "",
+        wait_time_mins: 0,
+      }));
+
       setTimeout(() => setBookingMessage(""), 5000);
     } catch (error) {
       console.error("Booking failed", error);
@@ -231,11 +270,12 @@ function App() {
               {/* Home is visible to everyone */}
               <button
                 onClick={() => setView("home")}
-                className={`px-4 py-2 flex hover:scale-110 transition duration-250 rounded-md cursor-pointer font-medium ${
-                  view === "home"
-                    ? "bg-purple-600 text-white"
-                    : "hover:bg-purple-600 text-gray-200"
-                }`}
+                className={`px-4 py-2 flex hover:scale-110 transition duration-250 rounded-md justify-center
+                  cursor-pointer font-medium ${
+                    view === "home"
+                      ? "bg-purple-600 text-white"
+                      : "hover:bg-purple-600 text-gray-200"
+                  }`}
               >
                 <img src={hom} className="w-6 h-6 mr-2" />
                 Home
@@ -248,7 +288,7 @@ function App() {
                 currentUser?.role === "Nurse") && (
                 <button
                   onClick={() => setView("patient")}
-                  className={`px-4 py-2 flex hover:scale-110 cursor-pointer transition duration-250 rounded-md font-medium ${
+                  className={`px-4 py-2 flex hover:scale-110 justify-center cursor-pointer transition duration-250 rounded-md font-medium ${
                     view === "patient"
                       ? "bg-purple-600 text-white"
                       : "hover:bg-purple-600 text-gray-200"
@@ -280,11 +320,10 @@ function App() {
 
                       <button
                         onClick={() => {
-                          setView("doctorSchedule");
-                          loadDoctorSchedule();
+                          setView("schedule");
                         }}
                         className={`px-4 py-2 flex hover:scale-110 cursor-pointer transition duration-250 rounded-md font-medium ${
-                          view === "doctorSchedule"
+                          view === "schedule"
                             ? "bg-purple-600 text-white"
                             : "hover:bg-purple-600 text-gray-200"
                         }`}
@@ -305,7 +344,7 @@ function App() {
                         setView("pharmacy");
                         loadPharmacy();
                       }}
-                      className={`px-4 py-2 rounded-md flex hover:scale-110 transition duration-250 font-medium ${view === "pharmacy" ? "bg-purple-600" : "hover:bg-purple-600"}`}
+                      className={`px-4 py-2 rounded-md flex cursor-pointer justify-center hover:scale-110 transition duration-250 font-medium ${view === "pharmacy" ? "bg-purple-600" : "hover:bg-purple-600"}`}
                     >
                       <img src={phar} className="w-6 h-6 mr-2" />
                       Pharmacy
@@ -321,7 +360,7 @@ function App() {
                         setView("billing");
                         loadBills();
                       }}
-                      className={`px-4 py-2 rounded-md flex hover:scale-110 transition duration-250 font-medium ${view === "billing" ? "bg-purple-600" : "hover:bg-purple-600"}`}
+                      className={`px-4 py-2 rounded-md flex cursor-pointer justify-center hover:scale-110 transition duration-250 font-medium ${view === "billing" ? "bg-purple-600" : "hover:bg-purple-600"}`}
                     >
                       <img src={bill} className="w-6 h-6 mr-2" />
                       Billing
@@ -333,13 +372,16 @@ function App() {
                     <>
                       <button
                         onClick={() => setView("triage")}
-                        className={`px-4 py-2 flex rounded-md hover:scale-110 font-medium transition duration-250 ${
+                        className={`px-4 py-2 flex justify-center rounded-md cursor-pointer hover:scale-110 font-medium transition duration-250 ${
                           view === "triage"
                             ? "bg-purple-600 text-white"
                             : "hover:bg-purple-600 text-gray-200"
                         }`}
                       >
-                        <img src={trg} className="w-6 h-6 mr-2" />
+                        <img
+                          src={trg}
+                          className="w-6 h-6 mr-2 bg-white rounded"
+                        />
                         Triage
                       </button>
 
@@ -348,7 +390,7 @@ function App() {
                           setView("nurseSchedule");
                           loadNurseSchedule();
                         }}
-                        className={`px-4 py-2 flex rounded-md ${
+                        className={`px-4 py-2 flex justify-center rounded-md cursor-pointer hover:scale-110 transition duration-250 ${
                           view === "nurseSchedule"
                             ? "bg-purple-600"
                             : "hover:bg-purple-600"
@@ -385,8 +427,10 @@ function App() {
                         setView("admin");
                         loadAdminHistory();
                       }}
-                      className={`px-4 py-2 rounded-md font-medium ${
-                        view === "admin" ? "bg-blue-600" : "hover:bg-slate-700"
+                      className={`px-4 py-2 rounded-md font-medium cursor-pointer hover:scale-110 transition duration-250 ${
+                        view === "admin"
+                          ? "bg-purple-600"
+                          : "hover:bg-slate-700"
                       }`}
                     >
                       Admin Panel
@@ -404,7 +448,7 @@ function App() {
                       </span>
                       <button
                         onClick={handleLogout}
-                        className="bg-red-600 hover:bg-red-700 px-4 py-2 rounded-md flex hover:scale-110 transition duration-250 text-sm font-bold text-white shadow-md"
+                        className="bg-red-600 hover:bg-red-700 px-4 py-2 rounded-md cursor-pointer flex hover:scale-110 transition duration-250 text-sm font-bold text-white shadow-md"
                       >
                         Logout
                         <img
@@ -421,7 +465,7 @@ function App() {
               {!currentUser && (
                 <button
                   onClick={() => setView("login")}
-                  className="ml-4 bg-slate-700 hover:bg-slate-600 px-4 py-2 rounded-md font-bold transition border border-slate-500"
+                  className="ml-4 bg-slate-700 hover:bg-slate-200 hover:scale-110 cursor-pointer hover:text-violet-500 px-4 py-2 rounded-md font-bold transition duration-250 border border-slate-500"
                 >
                   Staff Login
                 </button>
@@ -522,7 +566,7 @@ function App() {
                       onClick={() => {
                         setPatientData((prev) => ({
                           ...prev,
-                          doctor_id: doc.id,
+                          doctor_id: Number(doc.id),
                         }));
                         setView("patient");
                       }}
@@ -537,56 +581,6 @@ function App() {
                 </div>
               )}
             </div>
-          </div>
-        )}
-
-        {view === "doctorSchedule" && currentUser?.role === "Doctor" && (
-          <div>
-            <h2 className="text-3xl font-bold mb-6">Today's Appointments</h2>
-
-            {doctorSchedule.length === 0 ? (
-              <p>No appointments scheduled.</p>
-            ) : (
-              <div className="bg-slate-900/70 backdrop-blur-lg border border-slate-700 shadow rounded-lg overflow-hidden">
-                <table className="w-full">
-                  <thead className="bg-slate-900 text-orange-400 border-b border-slate-700">
-                    <tr className="hover:bg-slate-800/60 transition">
-                      <th className="py-3 px-6 text-left">Patient</th>
-                      <th className="py-3 px-6 text-center">Time</th>
-                      <th className="py-3 px-6 text-center">Urgency</th>
-                    </tr>
-                  </thead>
-                  <tbody>
-                    {doctorSchedule.map((item, index) => (
-                      <tr
-                        key={index}
-                        className="hover:bg-slate-800/60 transition border-b"
-                      >
-                        <td className="py-3 px-6 text-left">
-                          {item.patient_name}
-                        </td>
-                        <td className="py-3 px-6 font-semibold text-purple-600 text-center">
-                          {item.appointment_time}
-                        </td>
-                        <td className="py-3 px-6 text-center">
-                          <span
-                            className={`px-3 py-1 rounded-full text-xs font-bold ${
-                              item.urgency_level === "Emergency"
-                                ? "bg-red-100 text-red-700"
-                                : item.urgency_level === "Moderate"
-                                  ? "bg-yellow-100 text-yellow-700"
-                                  : "bg-green-100 text-green-700"
-                            }`}
-                          >
-                            {item.urgency_level}
-                          </span>
-                        </td>
-                      </tr>
-                    ))}
-                  </tbody>
-                </table>
-              </div>
-            )}
           </div>
         )}
 
@@ -644,13 +638,13 @@ function App() {
             {/* FIXED: We now call handleLoginSubmit so it passes the correct data instead of a blank event */}
             <form onSubmit={handleLoginSubmit} className="space-y-4">
               <div>
-                <label className="block text-sm font-medium text-gray-700 mb-1">
+                <label className="block text-sm font-medium text-violet-300 mb-1">
                   Username
                 </label>
                 <input
                   type="text"
                   required
-                  className="w-full border rounded-lg p-3 outline-none focus:ring-2 focus:ring-blue-500"
+                  className="w-full border rounded-lg p-3 outline-none focus:ring-2 focus:ring-purple-500"
                   value={loginData.username}
                   onChange={(e) =>
                     setLoginData({ ...loginData, username: e.target.value })
@@ -658,13 +652,13 @@ function App() {
                 />
               </div>
               <div>
-                <label className="block text-sm font-medium text-gray-700 mb-1">
+                <label className="block text-sm font-medium text-violet-300 mb-1">
                   Password
                 </label>
                 <input
                   type="password"
                   required
-                  className="w-full border rounded-lg p-3 outline-none focus:ring-2 focus:ring-blue-500"
+                  className="w-full border rounded-lg p-3 outline-none focus:ring-2 focus:ring-purple-500"
                   value={loginData.password}
                   onChange={(e) =>
                     setLoginData({ ...loginData, password: e.target.value })
@@ -673,7 +667,7 @@ function App() {
               </div>
               <button
                 type="submit"
-                className="w-full bg-slate-900 hover:bg-slate-800 text-white font-bold py-3 rounded-lg transition"
+                className="w-full bg-slate-900 hover:bg-green-500 cursor-pointer text-white font-bold py-3 rounded-lg transition"
               >
                 Log In
               </button>
@@ -749,7 +743,11 @@ function App() {
                         Select a department
                       </option>
                       {doctorsList.map((doc) => (
-                        <option key={doc.id} value={doc.id}>
+                        <option
+                          className="bg-slate-800"
+                          key={doc.id}
+                          value={doc.id}
+                        >
                           {doc.department} ({doc.name})
                         </option>
                       ))}
@@ -757,21 +755,31 @@ function App() {
                   </div>
                   <div>
                     <label className="block text-sm font-medium text-gray-700 mb-1">
-                      Triage Urgency
+                      Condition
                     </label>
                     <select
+                      required
                       className="w-full border rounded-lg p-3 outline-none focus:ring-2 focus:ring-blue-500"
-                      value={patientData.urgency_level}
+                      value={patientData.condition}
                       onChange={(e) =>
                         setPatientData({
                           ...patientData,
-                          urgency_level: parseInt(e.target.value),
+                          condition: e.target.value,
                         })
                       }
                     >
-                      <option value={1}>1 - Routine</option>
-                      <option value={3}>3 - Moderate</option>
-                      <option value={5}>5 - Emergency</option>
+                      <option value="" disabled>
+                        Select condition
+                      </option>
+                      {conditions.map((cond, index) => (
+                        <option
+                          className="bg-slate-800"
+                          key={index}
+                          value={cond}
+                        >
+                          {cond}
+                        </option>
+                      ))}
                     </select>
                   </div>
                 </div>
@@ -789,6 +797,9 @@ function App() {
         {/* VIEW 2: DOCTOR CONSOLE */}
         {view === "doctor" && currentUser?.role === "Doctor" && (
           <DoctorDashboard doctorId={currentUser.id} />
+        )}
+        {view === "schedule" && currentUser?.role === "Doctor" && (
+          <DoctorDashboard doctorId={currentUser.id} showSchedule={true} />
         )}
 
         {/* VIEW 3: PHARMACY */}

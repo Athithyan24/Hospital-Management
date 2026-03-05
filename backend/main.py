@@ -26,6 +26,99 @@ engine = create_engine(SQLALCHEMY_DATABASE_URL, connect_args={"check_same_thread
 SessionLocal = sessionmaker(autocommit=False, autoflush=False, bind=engine)
 Base = declarative_base()
 
+# ---------------- DEPARTMENT TRIAGE RULES ----------------
+
+DEPARTMENT_TRIAGE = {
+
+    "Cardiology": {
+        "Severe chest pain": 5,
+        "Suspected heart attack": 5,
+        "Very high BP (>180/120)": 5,
+        "Irregular heartbeat": 3,
+        "Moderate chest discomfort": 3,
+        "High BP (controlled)": 1,
+        "Routine ECG": 1,
+        "Regular heart checkup": 1
+    },
+
+    "Neurology": {
+        "Stroke symptoms": 5,
+        "Seizure attack": 5,
+        "Sudden unconsciousness": 5,
+        "Severe migraine": 3,
+        "Numbness in limbs": 3,
+        "Chronic headache": 1,
+        "Memory issues": 1,
+        "Follow-up visit": 1
+    },
+
+    "Pediatrics": {
+        "High fever (>103°F)": 5,
+        "Severe breathing difficulty": 5,
+        "Convulsions": 5,
+        "Persistent vomiting": 3,
+        "Moderate fever": 3,
+        "Ear pain": 1,
+        "Mild cold": 1,
+        "Vaccination visit": 1
+    },
+
+    "Orthopedics": {
+        "Open fracture": 5,
+        "Severe accident injury": 5,
+        "Closed fracture": 3,
+        "Severe joint swelling": 3,
+        "Back pain (moderate)": 3,
+        "Sprain": 1,
+        "Mild joint pain": 1,
+        "Follow-up visit": 1
+    },
+
+    "General Surgery": {
+        "Severe abdominal pain": 5,
+        "Internal bleeding": 5,
+        "Appendix rupture suspicion": 5,
+        "Moderate abdominal pain": 3,
+        "Hernia pain": 3,
+        "Minor wound dressing": 1,
+        "Suture removal": 1,
+        "Post-surgery review": 1
+    },
+
+    "Dermatology": {
+        "Severe allergic reaction": 5,
+        "Rapid spreading infection": 5,
+        "Painful skin abscess": 3,
+        "Severe eczema": 3,
+        "Chronic acne": 1,
+        "Skin rash": 1,
+        "Hair fall issue": 1,
+        "Routine skin consultation": 1
+    },
+
+    "Oncology": {
+        "Severe chemotherapy reaction": 5,
+        "Uncontrolled tumor bleeding": 5,
+        "Severe cancer pain": 3,
+        "New tumor symptom": 3,
+        "Routine chemo session": 1,
+        "Cancer follow-up": 1,
+        "Biopsy review": 1,
+        "Lab report consultation": 1
+    },
+
+    "Radiology": {
+        "Emergency trauma scan": 5,
+        "Internal injury scan": 5,
+        "Urgent MRI/CT required": 3,
+        "Severe pain imaging": 3,
+        "Routine X-ray": 1,
+        "Scheduled MRI": 1,
+        "Ultrasound check": 1,
+        "Report collection": 1
+    }
+}
+
 
 # --- 2. ADVANCED DATABASE MODELS ---
 class User(Base):
@@ -102,36 +195,27 @@ def send_whatsapp(phone, message):
     )
 
 def allocate_appointment_time(db, doctor_id, urgency):
+
     ist = ZoneInfo("Asia/Kolkata")
     now = datetime.now(ist)
 
-    # Doctor day start
     start_time = now.replace(hour=9, minute=0, second=0, microsecond=0)
 
     if now > start_time:
         start_time = now
 
-    # Get today's appointments for this doctor
-    appointments = db.query(Appointment)\
-        .filter(Appointment.doctor_id == doctor_id)\
-        .filter(Appointment.appointment_time != None)\
-        .order_by(Appointment.appointment_time.asc())\
-        .all()
-
     slot_time = start_time
 
-    # Emergency = immediate next slot
+    # Emergency
+    if urgency == 5:
+        return slot_time
+
+    # Intermediate
     if urgency == 3:
-        return slot_time
+        return slot_time + timedelta(minutes=15)
 
-    # Intermediate = after emergencies
-    if urgency == 2:
-        slot_time += timedelta(minutes=15)
-        return slot_time
-
-    # Normal = after emergency + intermediate
-    slot_time += timedelta(minutes=30)
-    return slot_time
+    # Routine
+    return slot_time + timedelta(minutes=30)
 
 def get_urgency_label(level: int):
     mapping = {
@@ -199,7 +283,7 @@ class AppointmentCreate(BaseModel):
     patient_name: str
     phone_number: str
     doctor_id: int
-    urgency_level: int
+    condition: str
     wait_time_mins: int = 0
 
 class ConsultationData(BaseModel):
@@ -224,6 +308,17 @@ def login(data: LoginRequest, db: Session = Depends(get_db)):
     if not user:
         raise HTTPException(status_code=401, detail="Invalid username or password")
     return {"id": user.id, "name": user.name, "department": user.department, "role": user.role}
+
+@app.get("/triage-options/{department}")
+def get_triage_options(department: str):
+
+    if department not in DEPARTMENT_TRIAGE:
+        return {"error": "Invalid department"}
+
+    return {
+        "department": department,
+        "conditions": list(DEPARTMENT_TRIAGE[department].keys())
+    }
 
 @app.get("/doctors")
 def get_doctors(db: Session = Depends(get_db)):
@@ -275,24 +370,37 @@ def admin_full_history(db: Session = Depends(get_db)):
 @app.post("/book-appointment/")
 def book_appointment(appt: AppointmentCreate, db: Session = Depends(get_db)):
 
-    # 1️⃣ Allocate time
-    allocated_time = allocate_appointment_time(
-        db,
-        appt.doctor_id,
-        appt.urgency_level
-    )
-
-    # 2️⃣ Get doctor details
+    # 1️⃣ Get doctor first
     doctor = db.query(User).filter(User.id == appt.doctor_id).first()
 
     if not doctor:
         raise HTTPException(status_code=404, detail="Doctor not found")
 
-    # 3️⃣ Get today's start time (IST)
+    department = doctor.department
+    condition = appt.condition
+
+    # 2️⃣ Validate Department
+    if department not in DEPARTMENT_TRIAGE:
+        raise HTTPException(status_code=400, detail="Invalid department")
+
+    # 3️⃣ Validate Condition
+    if condition not in DEPARTMENT_TRIAGE[department]:
+        raise HTTPException(status_code=400, detail="Invalid condition")
+
+    # 4️⃣ Assign urgency FIRST ✅
+    urgency_level = DEPARTMENT_TRIAGE[department][condition]
+
+    # 5️⃣ NOW allocate time (after urgency exists)
+    allocated_time = allocate_appointment_time(
+        db,
+        appt.doctor_id,
+        urgency_level
+    )
+
+    # 6️⃣ Token generation
     ist = ZoneInfo("Asia/Kolkata")
     today_start = datetime.now(ist).replace(hour=0, minute=0, second=0, microsecond=0)
 
-    # 4️⃣ Count today's appointments for same department
     dept_count = (
         db.query(Appointment)
         .join(User, Appointment.doctor_id == User.id)
@@ -305,12 +413,12 @@ def book_appointment(appt: AppointmentCreate, db: Session = Depends(get_db)):
 
     new_token = dept_count + 1
 
-    # 5️⃣ Create appointment with department-wise token
+    # 7️⃣ Create appointment
     new_appt = Appointment(
         patient_name=appt.patient_name,
         phone_number=appt.phone_number,
         doctor_id=appt.doctor_id,
-        urgency_level=appt.urgency_level,
+        urgency_level=urgency_level,
         wait_time_mins=appt.wait_time_mins,
         appointment_time=allocated_time,
         token_number=new_token
@@ -320,19 +428,17 @@ def book_appointment(appt: AppointmentCreate, db: Session = Depends(get_db)):
     db.commit()
     db.refresh(new_appt)
 
-    # Prepare message
-    urgency_label = get_urgency_label(appt.urgency_level)
+    urgency_label = get_urgency_label(urgency_level)
 
     message = f"""
-    CityCare Hospital
-    Department: {doctor.department}
-    Doctor: {doctor.name}
-    Token No: {new_token}
-    Urgency: {urgency_label}
-    Time: {allocated_time.strftime("%Y-%m-%d %I:%M %p")}
-    """
+CityCare Hospital
+Department: {doctor.department}
+Doctor: {doctor.name}
+Token No: {new_token}
+Urgency: {urgency_label}
+Time: {allocated_time.strftime("%Y-%m-%d %I:%M %p")}
+"""
 
-# Send SMS
     try:
         send_sms(appt.phone_number, message)
         send_whatsapp(appt.phone_number, message)
@@ -390,22 +496,52 @@ def doctor_schedule(doc_id: int, db: Session = Depends(get_db)):
 
 @app.get("/doctor/{doc_id}/queue")
 def get_doctor_queue(doc_id: int, db: Session = Depends(get_db)):
-    queue = db.query(Appointment, Vitals).outerjoin(Vitals, Appointment.id == Vitals.appointment_id)\
-        .filter(Appointment.doctor_id == doc_id, Appointment.status == "Waiting for Doctor")\
+
+    queue = db.query(Appointment, Vitals)\
+        .outerjoin(Vitals, Appointment.id == Vitals.appointment_id)\
+        .filter(
+            Appointment.doctor_id == doc_id,
+            Appointment.status == "Waiting for Doctor"
+        )\
         .all()
 
-    # Compute priority dynamically
+    # --- Calculate doctor load ONCE ---
+    doctor_load = db.query(Appointment)\
+        .filter(
+            Appointment.doctor_id == doc_id,
+            Appointment.status.in_(["Waiting for Doctor", "In Consultation"])
+        )\
+        .count()
+
     prioritized = []
+
     for appt, vitals in queue:
-        wait_time = (datetime.now(timezone.utc) - appt.created_at.replace(tzinfo=timezone.utc)).total_seconds() / 60
-        doctor_load = 0  # could be computed from today's completed appointments
-        score = calculate_priority(appt.urgency_level, wait_time, doctor_load)
+
+        wait_time = (
+            datetime.now(timezone.utc) -
+            appt.created_at.replace(tzinfo=timezone.utc)
+        ).total_seconds() / 60
+
+        urgency=appt.urgency_level
+
+        if wait_time <10:
+            effective_load = doctor_load
+        else:
+            effective_load = 0
+
+        score = calculate_priority(
+            urgency,
+            wait_time,
+            effective_load
+        )
+
         prioritized.append((score, appt, vitals))
-    
+
     # Highest priority first
     prioritized.sort(key=lambda x: -x[0])
 
     result = []
+
     for _, appt, vitals in prioritized:
         result.append({
             "appointment_id": appt.id,
@@ -421,6 +557,122 @@ def get_doctor_queue(doc_id: int, db: Session = Depends(get_db)):
         })
 
     return {"smart_queue": result}
+
+
+@app.get("/doctor/{doc_id}/compare-models")
+def compare_models(doc_id: int, db: Session = Depends(get_db)):
+
+    queue = db.query(Appointment)\
+        .filter(
+            Appointment.doctor_id == doc_id,
+            Appointment.status == "Waiting for Doctor"
+        )\
+        .all()
+
+    if not queue:
+        return {"message": "No active patients to compare"}
+
+    # ---------------- FIFO MODEL ----------------
+    fifo_sorted = sorted(queue, key=lambda x: x.created_at)
+
+    # ---------------- SMART MODEL ----------------
+    doctor_load = len(queue)
+
+    smart_list = []
+
+    for appt in queue:
+
+        wait_time = (
+            datetime.now(timezone.utc) -
+            appt.created_at.replace(tzinfo=timezone.utc)
+        ).total_seconds() / 60
+
+        # load affects only new patients (<10 min)
+        effective_load = doctor_load if wait_time < 10 else 0
+
+        score = calculate_priority(
+            appt.urgency_level,
+            wait_time,
+            effective_load
+        )
+
+        smart_list.append((score, appt))
+
+    smart_sorted = sorted(smart_list, key=lambda x: -x[0])
+
+    def avg_position(order_list):
+        total = 0
+        for i, appt in enumerate(order_list):
+            total += (i + 1)
+        return total / len(order_list)
+
+
+    fifo_avg_position = avg_position(fifo_sorted)
+    smart_avg_position = avg_position([x[1] for x in smart_sorted])
+
+
+# ---- Emergency Position Average ----
+
+    def avg_emergency_position(order_list):
+        positions = []
+        for i, appt in enumerate(order_list):
+            if appt.urgency_level == 5:
+                positions.append(i + 1)
+        return sum(positions) / len(positions) if positions else 0
+
+
+    fifo_emergency_avg = avg_emergency_position(fifo_sorted)
+    smart_emergency_avg = avg_emergency_position([x[1] for x in smart_sorted])
+
+    # ---------------- METRICS ----------------
+    fifo_emergency_positions = []
+    smart_emergency_positions = []
+
+    for i, appt in enumerate(fifo_sorted):
+        if appt.urgency_level == 5:
+            fifo_emergency_positions.append(i + 1)
+
+    for i, (score, appt) in enumerate(smart_sorted):
+        if appt.urgency_level == 5:
+            smart_emergency_positions.append(i + 1)
+
+    return {
+        "total_patients": len(queue),
+
+        "fifo_order": [
+            {
+                "position": i + 1,
+                "patient": appt.patient_name,
+                "urgency": appt.urgency_level
+            }
+            for i, appt in enumerate(fifo_sorted)
+        ],
+
+        "smart_order": [
+            {
+                "position": i + 1,
+                "patient": appt.patient_name,
+                "urgency": appt.urgency_level
+            }
+            for i, (score, appt) in enumerate(smart_sorted)
+        ],
+
+        "emergency_positions": {
+            "fifo": fifo_emergency_positions,
+            "smart": smart_emergency_positions
+        },
+
+        "metrics": {
+            "fifo_average_position": fifo_avg_position,
+            "smart_average_position": smart_avg_position,
+            "fifo_emergency_avg_position": fifo_emergency_avg,
+            "smart_emergency_avg_position": smart_emergency_avg,
+            "emergency_improvement": (
+                ((fifo_emergency_avg - smart_emergency_avg) / fifo_emergency_avg) * 100
+                if fifo_emergency_avg != 0 else 0
+            )
+        }
+    }
 
 @app.post("/attend-patient/{appointment_id}")
 def attend_patient(appointment_id: int, data: ConsultationData, db: Session = Depends(get_db)):

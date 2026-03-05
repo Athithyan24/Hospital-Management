@@ -39,21 +39,21 @@ export default function Login({ onLogin }) {
 
         <form onSubmit={handleSubmit} className="space-y-4">
           <div>
-            <label className="block text-sm font-medium text-gray-700 mb-1">Username</label>
+            <label className="block text-sm font-medium text-violet-500 mb-1">Username</label>
             <input
               type="text"
               required
-              className="w-full border border-gray-300 rounded-lg p-3 outline-none focus:ring-2 focus:ring-blue-500"
+              className="w-full border border-gray-300 rounded-lg p-3 outline-none focus:ring-2 focus:ring-purple-500"
               value={credentials.username}
               onChange={(e) => setCredentials({ ...credentials, username: e.target.value })}
             />
           </div>
           <div>
-            <label className="block text-sm font-medium text-gray-700 mb-1">Password</label>
+            <label className="block text-sm font-medium text-violet-500 mb-1">Password</label>
             <input
               type="password"
               required
-              className="w-full border border-gray-300 rounded-lg p-3 outline-none focus:ring-2 focus:ring-blue-500"
+              className="w-full border border-gray-300 rounded-lg p-3 outline-none focus:ring-2 focus:ring-purple-500"
               value={credentials.password}
               onChange={(e) => setCredentials({ ...credentials, password: e.target.value })}
             />
@@ -65,12 +65,6 @@ export default function Login({ onLogin }) {
             Sign In
           </button>
         </form>
-
-        <div className="mt-6 text-sm text-gray-500 text-center">
-          <p>Test Accounts:</p>
-          <p>Nurse: <b>nurse_joy</b> / password123</p>
-          <p>Doctor: <b>doc_cardio</b> / password123</p>
-        </div>
       </div>
     </div>
   );
